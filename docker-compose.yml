@@ -1,0 +1,20 @@
+version: "3.9"
+
+services:
+  quant-engine:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: quant-assignment
+    volumes:
+      - ./outputs:/app/outputs
+      - ./reports:/app/reports
+      - ./data_cache:/app/data_cache
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+    command: python scripts/run_backtest.py --config-dir config/
+
+volumes:
+  data_cache:
+    driver: local

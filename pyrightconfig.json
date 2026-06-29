@@ -1,0 +1,20 @@
+{
+  "venvPath": ".",
+  "pythonVersion": "3.11",
+  "pythonPlatform": "Windows",
+  "include": [
+    "src",
+    "scripts",
+    "tests"
+  ],
+  "extraPaths": [
+    "."
+  ],
+  "reportMissingImports": "none",
+  "reportMissingModuleSource": "none",
+  "typeCheckingMode": "basic",
+  "useLibraryCodeForTypes": true,
+  "reportGeneralTypeIssues": "warning",
+  "reportOptionalMemberAccess": "none",
+  "reportAttributeAccessIssue": "none"
+}

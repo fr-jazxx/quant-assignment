@@ -1,0 +1,40 @@
+# Core data & compute
+pandas>=2.1.0
+numpy>=1.26.0
+scipy>=1.11.0
+
+# Data fetching
+yfinance>=0.2.36
+
+# Config & validation
+pyyaml>=6.0.1
+pydantic>=2.5.0
+
+# Logging
+loguru>=0.7.2
+
+# CLI
+click>=8.1.7
+
+# Visualizations
+plotly>=5.18.0
+kaleido>=0.2.1
+
+# Parquet caching
+pyarrow>=14.0.0
+
+# Reporting
+jinja2>=3.1.2
+tabulate>=0.9.0
+
+# Testing
+pytest>=7.4.0
+pytest-cov>=4.1.0
+
+# Notebooks (optional)
+jupyter>=1.0.0
+ipykernel>=6.27.0
+
+# Utilities
+python-dateutil>=2.8.2
+tqdm>=4.66.0

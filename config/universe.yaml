@@ -1,0 +1,132 @@
+# Universe Configuration
+# NIFTY 100 constituent symbols (NSE tickers with .NS suffix for yfinance)
+# Source: NSE India NIFTY 100 factsheet (as of December 2023)
+# Limitation: This is a static snapshot — point-in-time constituents are NOT available
+# via public data. Survivorship bias is acknowledged and documented in the research report.
+
+universe:
+  name: "NIFTY100_STATIC_2023"
+  description: "Static NIFTY 100 constituent list as of Dec 2023 (survivorship-biased)"
+  exchange: "NSE"
+  currency: "INR"
+  data_source: "yfinance"
+  suffix: ".NS"   # yfinance NSE suffix
+
+  # Benchmark index
+  benchmark: "^NSEI"   # NIFTY 50 index on yfinance
+
+  # Historical date range
+  # Note: We fetch from 2014-07-01 to give lookback signals enough warm-up data
+  # before the training period begins on 2015-01-01.
+  start_date: "2014-07-01"   # Extra 6 months for signal warm-up (252-day lookback)
+  end_date: "2020-12-31"
+
+  # Training / validation / out-of-sample split
+  # OOS period covers 2020 — includes the COVID crash (Mar 2020) and recovery,
+  # which is the most challenging stress test for any equity strategy.
+  train_end: "2017-12-31"       # 3 years training
+  validation_end: "2019-12-31"  # 2 years validation
+  oos_start: "2020-01-01"       # 1 year OOS (COVID year — real stress test)
+
+  # Minimum data availability (trading days) before a stock is included
+  min_trading_days: 252   # ~1 year
+
+  symbols:
+    - "RELIANCE.NS"
+    - "TCS.NS"
+    - "HDFCBANK.NS"
+    - "ICICIBANK.NS"
+    - "INFY.NS"
+    - "HINDUNILVR.NS"
+    - "ITC.NS"
+    - "SBIN.NS"
+    - "BHARTIARTL.NS"
+    - "KOTAKBANK.NS"
+    - "LT.NS"
+    - "AXISBANK.NS"
+    - "ASIANPAINT.NS"
+    - "MARUTI.NS"
+    - "SUNPHARMA.NS"
+    - "TITAN.NS"
+    - "WIPRO.NS"
+    - "ULTRACEMCO.NS"
+    - "NESTLEIND.NS"
+    - "TECHM.NS"
+    - "POWERGRID.NS"
+    - "NTPC.NS"
+    - "BAJFINANCE.NS"
+    - "BAJAJFINSV.NS"
+    - "HCLTECH.NS"
+    - "ONGC.NS"
+    - "COALINDIA.NS"
+    - "M&M.NS"
+    - "JSWSTEEL.NS"
+    - "TATASTEEL.NS"
+    - "TATAMOTORS.NS"
+    - "ADANIENT.NS"
+    - "ADANIPORTS.NS"
+    - "GRASIM.NS"
+    - "DIVISLAB.NS"
+    - "DRREDDY.NS"
+    - "CIPLA.NS"
+    - "EICHERMOT.NS"
+    - "HEROMOTOCO.NS"
+    - "BPCL.NS"
+    - "IOC.NS"
+    - "INDUSINDBK.NS"
+    - "BAJAJ-AUTO.NS"
+    - "BRITANNIA.NS"
+    - "DABUR.NS"
+    - "GODREJCP.NS"
+    - "PIDILITIND.NS"
+    - "BERGEPAINT.NS"
+    - "HAVELLS.NS"
+    - "SIEMENS.NS"
+    - "ABB.NS"
+    - "BOSCHLTD.NS"
+    - "PAGEIND.NS"
+    - "UNITDSPR.NS"
+    - "UBL.NS"
+    - "TATACONSUM.NS"
+    - "MARICO.NS"
+    - "COLPAL.NS"
+    - "APOLLOHOSP.NS"
+    - "FORTIS.NS"
+    - "LUPIN.NS"
+    - "BIOCON.NS"
+    - "AUROPHARMA.NS"
+    - "TORNTPHARM.NS"
+    - "ZYDUSLIFE.NS"
+    - "INDIGO.NS"
+    - "TATAPOWER.NS"
+    - "ADANIGREEN.NS"
+    - "ADANIPORTS.NS"
+    - "DLF.NS"
+    - "GODREJPROP.NS"
+    - "OBEROIRLTY.NS"
+    - "PHOENIXLTD.NS"
+    - "HDFCLIFE.NS"
+    - "SBILIFE.NS"
+    - "ICICIPRULI.NS"
+    - "GICRE.NS"
+    - "NIACL.NS"
+    - "FEDERALBNK.NS"
+    - "BANDHANBNK.NS"
+    - "IDFCFIRSTB.NS"
+    - "PNB.NS"
+    - "BANKBARODA.NS"
+    - "CANBK.NS"
+    - "MUTHOOTFIN.NS"
+    - "CHOLAFIN.NS"
+    - "SHRIRAMFIN.NS"
+    - "RECLTD.NS"
+    - "PFC.NS"
+    - "TVSMOTOR.NS"
+    - "ASHOKLEY.NS"
+    - "BALKRISIND.NS"
+    - "CUMMINSIND.NS"
+    - "ALKEM.NS"
+    - "VEDL.NS"
+    - "HINDALCO.NS"
+    - "SAIL.NS"
+    - "NMDC.NS"

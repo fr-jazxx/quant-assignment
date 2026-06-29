@@ -1,0 +1,55 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Data cache (large files — do not commit raw market data)
+data_cache/
+*.parquet
+*.h5
+*.hdf5
+
+# Outputs (generated — not committed)
+outputs/
+*.png
+*.html
+
+# Secrets — NEVER commit API keys
+.env.local
+secrets.yaml
+api_keys.yaml
+
+# Logs
+logs/
+*.log
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Coverage
+.coverage
+htmlcov/
+.pytest_cache/

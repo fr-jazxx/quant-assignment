@@ -1,0 +1,75 @@
+# Backtest Configuration
+# These parameters define the simulation environment — costs, risk controls,
+# portfolio constraints. All assumptions are explicitly stated here.
+
+backtest:
+  # ─── Execution Assumptions ───────────────────────────────────────────────
+  # Signals are computed at close of day T.
+  # Trades execute at OPEN of day T+1 (conservative — avoids look-ahead bias).
+  # This is an approximation; in practice, market-on-open orders may not fill
+  # at exactly the open price for large orders.
+  execution: "next_day_open"
+
+  # ─── Initial Capital ─────────────────────────────────────────────────────
+  initial_capital: 10000000   # INR 1 crore (₹1,00,00,000)
+
+  # ─── Transaction Costs ───────────────────────────────────────────────────
+  # Based on SEBI / NSE schedule as of 2023–2024.
+  # Reference: NSE Circular No. NSE/MEMB/45765 and SEBI circular CIR/IMD/DF/10/2010
+  costs:
+    # Securities Transaction Tax (STT) — equity delivery: 0.1% on sell side only
+    stt_rate: 0.001
+    # Exchange transaction charges (NSE): ~0.00345% of turnover
+    exchange_charges_rate: 0.0000345
+    # SEBI turnover fee: 0.0001% of turnover
+    sebi_fee_rate: 0.000001
+    # Stamp duty: 0.015% on buy side (as per Finance Act 2019)
+    stamp_duty_rate: 0.00015
+    # Brokerage (flat-rate discount broker assumption): 0.03% or ₹20/order, whichever lower
+    brokerage_rate: 0.0003
+    # Goods and Services Tax (GST) on brokerage + exchange charges: 18%
+    gst_rate: 0.18
+    # Total approximate one-way cost in basis points (informational)
+    # ~0.145% one-way → ~0.29% round-trip (conservative for delivery trades)
+
+  # ─── Slippage Model ──────────────────────────────────────────────────────
+  slippage:
+    # Fixed slippage in basis points applied per trade (one-way)
+    # 5 bps is conservative for NIFTY 100 liquid stocks during normal conditions
+    fixed_bps: 5
+    # Optional: volume-dependent slippage (disabled by default)
+    volume_dependent: false
+    # If enabled, scale slippage when order size > this % of daily average volume
+    volume_threshold_pct: 0.01   # 1% of ADV
+
+  # ─── Portfolio Constraints ───────────────────────────────────────────────
+  portfolio:
+    # Maximum weight any single stock can hold (%)
+    max_stock_weight: 0.10     # 10%
+    # Maximum number of positions across all signals
+    max_positions: 40
+    # Minimum position size — positions below this are set to zero to avoid noise
+    min_position_weight: 0.005  # 0.5%
+    # Cash buffer — minimum cash maintained at all times
+    cash_buffer: 0.02          # 2% cash always held
+    # Rebalance tolerance — only rebalance if drift exceeds this
+    rebalance_tolerance: 0.02  # 2% drift from target
+
+  # ─── Risk Controls ───────────────────────────────────────────────────────
+  risk:
+    # Portfolio-level stop: reduce all positions if drawdown exceeds this
+    portfolio_stop_drawdown: 0.20   # 20% peak-to-trough stop
+    # Single-stock concentration hard cap (overrides portfolio construction)
+    hard_max_stock_weight: 0.15     # 15%
+
+  # ─── Missing Data Policy ────────────────────────────────────────────────
+  data:
+    # Maximum consecutive NaN days before treating a position as unavailable
+    max_fill_days: 3
+    # If a stock has no price on execution day, skip it (do not estimate)
+    skip_missing_execution_price: true
+    # Treat stocks with no close price as delisted after this many missing days
+    delisting_threshold_days: 10
+
+  # ─── Reproducibility ─────────────────────────────────────────────────────
+  random_seed: 42

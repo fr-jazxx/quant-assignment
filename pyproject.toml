@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "quant-assignment"
+version = "0.1.0"
+description = "Indian Equity Quant Research and Backtesting Engine"
+requires-python = ">=3.11"
+dependencies = [
+    "pandas>=2.1.0",
+    "numpy>=1.26.0",
+    "scipy>=1.11.0",
+    "yfinance>=0.2.36",
+    "pyyaml>=6.0.1",
+    "pydantic>=2.5.0",
+    "loguru>=0.7.2",
+    "click>=8.1.7",
+    "plotly>=5.18.0",
+    "kaleido>=0.2.1",
+    "pyarrow>=14.0.0",
+    "jinja2>=3.1.2",
+    "tabulate>=0.9.0",
+    "python-dateutil>=2.8.2",
+    "tqdm>=4.66.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "jupyter>=1.0.0",
+    "ipykernel>=6.27.0",
+]
+
+[project.scripts]
+run-backtest = "scripts.run_backtest:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*", "scripts*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+
+[tool.coverage.run]
+source = ["src"]
+omit = ["tests/*", "notebooks/*"]

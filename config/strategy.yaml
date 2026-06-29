@@ -1,0 +1,83 @@
+# Strategy Configuration
+# All signal parameters are centralized here — no magic numbers in code.
+# Modify this file to run parameter sensitivity analysis.
+
+signals:
+  momentum:
+    name: "Cross-Sectional 12-1 Momentum"
+    enabled: true
+    # Lookback window in trading days (approx 252 = 12 months)
+    lookback_days: 252
+    # Skip most recent month to avoid short-term reversal contamination
+    skip_days: 21
+    # Top N stocks to select (long-only)
+    top_n: 20
+    # Minimum number of valid stocks needed to generate signal
+    min_valid_stocks: 30
+    # Rebalance frequency: "monthly", "weekly"
+    rebalance_freq: "monthly"
+    # Minimum price filter (INR) — removes penny stocks
+    min_price: 50.0
+    # Minimum average daily volume (INR crore) proxy via share price * volume
+    min_avg_volume_shares: 100000
+
+  mean_reversion:
+    name: "Short-Term Mean Reversion (RSI + Z-Score)"
+    enabled: true
+    # RSI window (trading days)
+    rsi_window: 5
+    # RSI oversold threshold — buy when RSI below this
+    rsi_oversold: 30
+    # Z-score window for deviation from rolling mean
+    zscore_window: 20
+    # Z-score entry threshold (buy when z-score below negative of this)
+    zscore_threshold: -2.0
+    # Maximum number of positions at any time
+    max_positions: 15
+    # Rebalance frequency
+    rebalance_freq: "weekly"
+    # Exit condition: RSI recovers above this
+    rsi_exit: 50
+    # Minimum lookback days before signal is live
+    min_history_days: 30
+
+  regime_filter:
+    name: "Volatility Regime and Market Breadth Filter"
+    enabled: true
+    # Realized volatility window (trading days)
+    vol_window: 20
+    # Long-run volatility window for comparison
+    vol_longrun_window: 126   # ~6 months
+    # High-vol multiplier: if current vol > this * long_run vol → reduce risk
+    vol_expansion_threshold: 1.5
+    # Risk-reduction factor when in high-vol regime (0.0 = fully out, 1.0 = no change)
+    high_vol_risk_factor: 0.3
+    # Market breadth: % of stocks above their 200-day SMA
+    breadth_window: 200
+    # Breadth threshold below which risk is reduced
+    breadth_low_threshold: 0.40
+    # Breadth risk factor when breadth is below threshold
+    breadth_risk_factor: 0.5
+    # Evaluation frequency
+    eval_freq: "daily"
+
+meta_allocator:
+  name: "Rule-Based Meta-Allocator"
+  # Rolling window for Sharpe calculation (trading days)
+  rolling_sharpe_window: 60
+  # Risk-free rate annualised (approximating India 91-day T-bill ~6.5%)
+  risk_free_rate: 0.065
+  # Maximum drawdown allowed before reducing allocation (fraction, e.g. 0.15 = 15%)
+  max_drawdown_gate: 0.15
+  # Drawdown gate allocation reduction factor
+  drawdown_reduction_factor: 0.5
+  # Rolling window to compute inter-strategy correlation
+  correlation_window: 30
+  # High correlation threshold — above this, strategies are considered redundant
+  high_correlation_threshold: 0.80
+  # Minimum weight any active strategy can receive (prevents noise)
+  min_weight: 0.05
+  # Whether to normalise weights to sum to 1.0
+  normalise_weights: true
+  # Rebalance frequency for meta-allocation
+  rebalance_freq: "monthly"
