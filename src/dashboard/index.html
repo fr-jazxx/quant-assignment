@@ -1,0 +1,1147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IndiQuant - Backtesting & Quant Research Dashboard</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;700&family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg-color: #080c14;
+            --sidebar-bg: #0e1422;
+            --card-bg: #131b2e;
+            --accent-color: #00d4aa;
+            --accent-glow: rgba(0, 212, 170, 0.15);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --border-glow: rgba(0, 212, 170, 0.2);
+            --text-primary: #f3f4f6;
+            --text-secondary: #9ca3af;
+            --text-muted: #6b7280;
+            --danger-color: #ff4757;
+            --warning-color: #ffa502;
+            --success-color: #2ed573;
+            --font-main: 'Inter', sans-serif;
+            --font-title: 'Outfit', sans-serif;
+            --font-code: 'Fira Code', monospace;
+            --shadow-sm: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+            --shadow-md: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+            --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.4);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            font-family: var(--font-main);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+        }
+
+        /* ─── Sidebar ────────────────────────────────────────────────────────── */
+        .sidebar {
+            width: 280px;
+            background-color: var(--sidebar-bg);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            padding: 24px;
+            height: 100%;
+            flex-shrink: 0;
+            z-index: 10;
+        }
+
+        .logo-container {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 40px;
+        }
+
+        .logo-icon {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, var(--accent-color), #00a8cc);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: var(--font-title);
+            font-weight: 800;
+            font-size: 20px;
+            color: var(--sidebar-bg);
+            box-shadow: 0 0 15px var(--accent-glow);
+        }
+
+        .logo-text {
+            font-family: var(--font-title);
+            font-weight: 800;
+            font-size: 22px;
+            letter-spacing: -0.5px;
+            background: linear-gradient(to right, var(--text-primary), #a5b4fc);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .nav-menu {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            list-style: none;
+            flex-grow: 1;
+        }
+
+        .nav-item button {
+            width: 100%;
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-family: var(--font-main);
+            font-size: 15px;
+            font-weight: 500;
+            padding: 12px 16px;
+            border-radius: 8px;
+            text-align: left;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            transition: all 0.25s ease;
+        }
+
+        .nav-item button:hover {
+            background-color: rgba(255, 255, 255, 0.03);
+            color: var(--text-primary);
+        }
+
+        .nav-item.active button {
+            background-color: var(--accent-glow);
+            color: var(--accent-color);
+            box-shadow: inset 0 0 0 1px rgba(0, 212, 170, 0.2);
+            font-weight: 600;
+        }
+
+        .sidebar-footer {
+            margin-top: auto;
+            border-top: 1px solid var(--border-color);
+            padding-top: 16px;
+        }
+
+        .server-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--success-color);
+            box-shadow: 0 0 8px var(--success-color);
+        }
+
+        /* ─── Main Content Area ──────────────────────────────────────────────── */
+        .main-content {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        .top-header {
+            height: 80px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 40px;
+            background-color: rgba(8, 12, 20, 0.5);
+            backdrop-filter: blur(10px);
+            z-index: 5;
+        }
+
+        .header-title h1 {
+            font-family: var(--font-title);
+            font-weight: 600;
+            font-size: 22px;
+            color: var(--text-primary);
+        }
+
+        /* ─── Tabs Content ───────────────────────────────────────────────────── */
+        .tab-panel {
+            display: none;
+            flex-grow: 1;
+            padding: 30px 40px;
+            overflow-y: auto;
+            height: calc(100vh - 80px);
+        }
+
+        .tab-panel.active {
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ─── Cards Grid (Overview Metrics) ──────────────────────────────────── */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .metric-card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .metric-card:hover {
+            transform: translateY(-4px);
+            border-color: rgba(0, 212, 170, 0.3);
+            box-shadow: 0 10px 20px -5px rgba(0, 212, 170, 0.05), var(--shadow-md);
+        }
+
+        .metric-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            background: linear-gradient(90deg, transparent, var(--accent-color), transparent);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .metric-card:hover::before {
+            opacity: 1;
+        }
+
+        .metric-title {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .metric-value {
+            font-family: var(--font-title);
+            font-weight: 700;
+            font-size: 26px;
+            color: var(--text-primary);
+        }
+
+        .metric-value.positive {
+            color: var(--success-color);
+        }
+
+        .metric-value.negative {
+            color: var(--danger-color);
+        }
+
+        /* ─── Performance Charts Viewer ──────────────────────────────────────── */
+        .dashboard-body-grid {
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            gap: 30px;
+            flex-grow: 1;
+            min-height: 500px;
+        }
+
+        .chart-selector-menu {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            background-color: var(--sidebar-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 16px;
+            height: fit-content;
+        }
+
+        .chart-selector-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            margin-bottom: 8px;
+            letter-spacing: 0.5px;
+        }
+
+        .chart-btn {
+            background: none;
+            border: 1px solid transparent;
+            color: var(--text-secondary);
+            font-family: var(--font-main);
+            font-size: 14px;
+            font-weight: 500;
+            padding: 12px 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            text-align: left;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .chart-btn:hover {
+            background-color: rgba(255, 255, 255, 0.02);
+            color: var(--text-primary);
+        }
+
+        .chart-btn.active {
+            background-color: rgba(0, 212, 170, 0.08);
+            border-color: rgba(0, 212, 170, 0.2);
+            color: var(--accent-color);
+            font-weight: 600;
+        }
+
+        .chart-display-card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: var(--shadow-lg);
+            position: relative;
+        }
+
+        .chart-iframe-wrapper {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            flex-grow: 1;
+        }
+
+        .chart-iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            background-color: #0d1117; /* Matches Plotly background */
+        }
+
+        .no-data-placeholder {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background-color: var(--card-bg);
+            color: var(--text-secondary);
+            gap: 16px;
+            z-index: 2;
+        }
+
+        .no-data-icon {
+            font-size: 48px;
+        }
+
+        /* ─── Configurations Panel ───────────────────────────────────────────── */
+        .config-layout {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+            height: 100%;
+        }
+
+        .config-selector-tabs {
+            display: flex;
+            gap: 12px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 1px;
+        }
+
+        .config-selector-btn {
+            background: none;
+            border: none;
+            border-bottom: 2px solid transparent;
+            color: var(--text-secondary);
+            font-family: var(--font-main);
+            font-size: 15px;
+            font-weight: 600;
+            padding: 12px 20px;
+            cursor: pointer;
+            transition: all 0.25s ease;
+        }
+
+        .config-selector-btn:hover {
+            color: var(--text-primary);
+        }
+
+        .config-selector-btn.active {
+            border-bottom-color: var(--accent-color);
+            color: var(--accent-color);
+        }
+
+        .config-editor-container {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: var(--shadow-lg);
+        }
+
+        .config-editor-header {
+            padding: 16px 24px;
+            background-color: rgba(255, 255, 255, 0.02);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .config-description {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .config-actions {
+            display: flex;
+            gap: 16px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-family: var(--font-main);
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            border: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background-color: var(--accent-color);
+            color: var(--bg-color);
+            box-shadow: 0 4px 14px var(--accent-glow);
+        }
+
+        .btn-primary:hover {
+            background-color: #00f0c2;
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(0, 212, 170, 0.25);
+        }
+
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+
+        .btn-secondary {
+            background-color: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+        }
+
+        .btn-secondary:hover {
+            background-color: rgba(255, 255, 255, 0.08);
+        }
+
+        .config-textarea-wrapper {
+            flex-grow: 1;
+            position: relative;
+            padding: 10px;
+        }
+
+        .config-textarea {
+            width: 100%;
+            height: 100%;
+            min-height: 400px;
+            background: none;
+            border: none;
+            color: #c9d1d9; /* Monokai-ish light */
+            font-family: var(--font-code);
+            font-size: 14px;
+            line-height: 1.6;
+            resize: none;
+            outline: none;
+            padding: 16px;
+        }
+
+        /* ─── Backtest Runner Panel ──────────────────────────────────────────── */
+        .runner-layout {
+            display: grid;
+            grid-template-columns: 320px 1fr;
+            gap: 30px;
+            height: 100%;
+        }
+
+        .runner-controls {
+            background-color: var(--sidebar-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            height: fit-content;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .control-label {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .select-input {
+            width: 100%;
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 12px;
+            border-radius: 8px;
+            outline: none;
+            font-family: var(--font-main);
+            font-size: 14px;
+            cursor: pointer;
+            transition: border-color 0.25s ease;
+        }
+
+        .select-input:focus {
+            border-color: var(--accent-color);
+        }
+
+        .checkbox-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            font-size: 14px;
+            color: var(--text-secondary);
+            user-select: none;
+        }
+
+        .checkbox-input {
+            width: 18px;
+            height: 18px;
+            accent-color: var(--accent-color);
+            cursor: pointer;
+        }
+
+        .terminal-panel {
+            background-color: #05080f;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: var(--shadow-lg);
+        }
+
+        .terminal-header {
+            padding: 14px 20px;
+            background-color: #090e1a;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .terminal-title {
+            font-family: var(--font-code);
+            font-size: 13px;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .terminal-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: var(--danger-color);
+        }
+
+        .terminal-body {
+            flex-grow: 1;
+            padding: 20px;
+            font-family: var(--font-code);
+            font-size: 13px;
+            line-height: 1.6;
+            color: var(--success-color);
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+            height: calc(100vh - 280px);
+        }
+
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-family: var(--font-main);
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .status-idle { background-color: rgba(255,255,255,0.08); color: var(--text-secondary); }
+        .status-running { background-color: rgba(255, 165, 0, 0.15); color: var(--warning-color); border: 1px solid rgba(255, 165, 0, 0.2); }
+        .status-success { background-color: rgba(46, 213, 115, 0.15); color: var(--success-color); border: 1px solid rgba(46, 213, 115, 0.2); }
+        .status-failed { background-color: rgba(255, 71, 87, 0.15); color: var(--danger-color); border: 1px solid rgba(255, 71, 87, 0.2); }
+
+        /* Notification Toast */
+        .toast {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            padding: 16px 24px;
+            border-radius: 8px;
+            background-color: var(--card-bg);
+            border: 1px solid rgba(0, 212, 170, 0.3);
+            box-shadow: var(--shadow-lg);
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        .toast-icon {
+            font-size: 20px;
+        }
+
+        .toast-success { border-color: rgba(46, 213, 115, 0.3); }
+        .toast-success .toast-icon { color: var(--success-color); }
+        .toast-error { border-color: rgba(255, 71, 87, 0.3); }
+        .toast-error .toast-icon { color: var(--danger-color); }
+
+    </style>
+</head>
+<body>
+
+    <!-- ─── Sidebar ────────────────────────────────────────────────────────── -->
+    <aside class="sidebar">
+        <div class="logo-container">
+            <div class="logo-icon">IQ</div>
+            <div class="logo-text">IndiQuant</div>
+        </div>
+        
+        <ul class="nav-menu">
+            <li class="nav-item active" id="nav-performance">
+                <button onclick="switchTab('performance')">
+                    <span>📊</span> Performance & Charts
+                </button>
+            </li>
+            <li class="nav-item" id="nav-configs">
+                <button onclick="switchTab('configs')">
+                    <span>⚙️</span> Strategy Configs
+                </button>
+            </li>
+            <li class="nav-item" id="nav-runner">
+                <button onclick="switchTab('runner')">
+                    <span>🚀</span> Backtest Runner
+                </button>
+            </li>
+        </ul>
+
+        <div class="sidebar-footer">
+            <div class="server-status">
+                <div class="status-indicator"></div>
+                <span>Server active (Port 8000)</span>
+            </div>
+        </div>
+    </aside>
+
+    <!-- ─── Main Panel ─────────────────────────────────────────────────────── -->
+    <main class="main-content">
+        
+        <!-- Header -->
+        <header class="top-header">
+            <div class="header-title">
+                <h1 id="panel-title-text">Strategy Performance & Charts</h1>
+            </div>
+        </header>
+
+        <!-- 1. Performance Panel -->
+        <section class="tab-panel active" id="panel-performance">
+            <!-- Metrics Row -->
+            <div class="metrics-grid" id="metrics-container">
+                <!-- Loaded dynamically -->
+                <div style="grid-column: 1/-1; text-align: center; color: var(--text-secondary); padding: 10px;">
+                    Loading performance metrics...
+                </div>
+            </div>
+
+            <!-- Dashboard Grid -->
+            <div class="dashboard-body-grid">
+                <!-- Left: Chart options selector -->
+                <div class="chart-selector-menu">
+                    <div class="chart-selector-title">Visualizations</div>
+                    <button class="chart-btn active" id="chart-btn-equity" onclick="loadChart('equity_curve')">
+                        <span>Equity Curve</span> <span>📈</span>
+                    </button>
+                    <button class="chart-btn" id="chart-btn-drawdown" onclick="loadChart('drawdown_curve')">
+                        <span>Drawdown Curve</span> <span>📉</span>
+                    </button>
+                    <button class="chart-btn" id="chart-btn-heatmap" onclick="loadChart('monthly_heatmap')">
+                        <span>Monthly Returns</span> <span>📅</span>
+                    </button>
+                    <button class="chart-btn" id="chart-btn-metrics" onclick="loadChart('rolling_metrics')">
+                        <span>Rolling Risk</span> <span>⚙️</span>
+                    </button>
+                    <button class="chart-btn" id="chart-btn-weights" onclick="loadChart('meta_allocation')">
+                        <span>Strategy Weights</span> <span>⚖️</span>
+                    </button>
+                    <button class="chart-btn" id="chart-btn-regime" onclick="loadChart('regime_overlay')">
+                        <span>Regime Overlays</span> <span>🛡️</span>
+                    </button>
+                </div>
+
+                <!-- Right: Chart viewer iframe -->
+                <div class="chart-display-card">
+                    <div class="chart-iframe-wrapper">
+                        <iframe id="chart-viewer" class="chart-iframe" src=""></iframe>
+                        <div class="no-data-placeholder" id="chart-no-data" style="display: none;">
+                            <div class="no-data-icon">📁</div>
+                            <h3>No interactive plot generated.</h3>
+                            <p>Please run a simulation backtest to generate report charts.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2. Configurations Panel -->
+        <section class="tab-panel" id="panel-configs">
+            <div class="config-layout">
+                <!-- Configuration Selectors -->
+                <div class="config-selector-tabs">
+                    <button class="config-selector-btn active" id="config-btn-universe" onclick="switchConfig('universe')">
+                        universe.yaml
+                    </button>
+                    <button class="config-selector-btn" id="config-btn-strategy" onclick="switchConfig('strategy')">
+                        strategy.yaml
+                    </button>
+                    <button class="config-selector-btn" id="config-btn-backtest" onclick="switchConfig('backtest')">
+                        backtest.yaml
+                    </button>
+                </div>
+
+                <!-- Textarea Editor -->
+                <div class="config-editor-container">
+                    <div class="config-editor-header">
+                        <div class="config-description" id="config-editor-desc">
+                            Selects target symbols, index benchmark, and training/OOS time splits.
+                        </div>
+                        <div class="config-actions">
+                            <button class="btn btn-secondary" onclick="reloadConfigs()">Discard</button>
+                            <button class="btn btn-primary" onclick="saveConfigs()">Save Configuration</button>
+                        </div>
+                    </div>
+                    <div class="config-textarea-wrapper">
+                        <textarea id="config-textarea" class="config-textarea" spellcheck="false"></textarea>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 3. Runner Panel -->
+        <section class="tab-panel" id="panel-runner">
+            <div class="runner-layout">
+                <!-- Control Panel -->
+                <div class="runner-controls">
+                    <div class="control-group">
+                        <label class="control-label" for="run-period">Execution Period</label>
+                        <select id="run-period" class="select-input">
+                            <option value="full">Full Simulation (2015-2024)</option>
+                            <option value="train">Training Only (2015-2020)</option>
+                            <option value="validation">Validation (2021-2022)</option>
+                            <option value="oos" selected>Out-of-Sample (2023-2024)</option>
+                        </select>
+                    </div>
+
+                    <div class="control-group" style="margin-top: 10px;">
+                        <label class="checkbox-container">
+                            <input type="checkbox" id="run-refresh" class="checkbox-input">
+                            <span>Force Refresh Data</span>
+                        </label>
+                    </div>
+
+                    <button class="btn btn-primary" id="run-btn" onclick="startBacktest()" style="margin-top: 20px; justify-content: center;">
+                        ⚡ Run Backtest Engine
+                    </button>
+                </div>
+
+                <!-- Console Output -->
+                <div class="terminal-panel">
+                    <div class="terminal-header">
+                        <div class="terminal-title">
+                            <div class="terminal-dot"></div>
+                            <span>IndiQuant Console logs</span>
+                        </div>
+                        <div style="display: flex; gap: 12px; align-items: center;">
+                            <span class="status-badge status-idle" id="runner-status-badge">IDLE</span>
+                            <button class="btn btn-secondary" onclick="clearConsole()" style="padding: 6px 12px; font-size: 11px;">Clear</button>
+                        </div>
+                    </div>
+                    <div class="terminal-body" id="terminal-body">--- Console Ready. Waiting to launch backtest ---</div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Notification Toast -->
+    <div class="toast" id="notification-toast">
+        <span class="toast-icon" id="toast-icon">✓</span>
+        <span id="toast-message">Configs saved successfully.</span>
+    </div>
+
+    <!-- ─── Script Logic ────────────────────────────────────────────────────── -->
+    <script>
+        // State variables
+        let rawConfigs = { universe: "", strategy: "", backtest: "" };
+        let activeConfigTab = "universe";
+        let activeChartName = "equity_curve";
+        let logsInterval = null;
+        let isRunningBacktest = false;
+
+        // Configuration file descriptions
+        const configDescriptions = {
+            universe: "Defines asset list, trading indexes, and date configurations for train/oos periods.",
+            strategy: "Specifies mathematical parameters, lookbacks, thresholds, and meta-allocation parameters.",
+            backtest: "Determines friction rates, SEBI transaction costs, slippage, and weight/cash sizing constraints."
+        };
+
+        // Initialize Page
+        window.addEventListener('DOMContentLoaded', () => {
+            fetchMetrics();
+            loadChart('equity_curve');
+            reloadConfigs();
+            checkRunningStatus();
+        });
+
+        // Tab Switching Logic
+        function switchTab(tabId) {
+            // Update tabs sidebar active classes
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+            document.getElementById(`nav-${tabId}`).classList.add('active');
+
+            // Update main view panels
+            document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.remove('active'));
+            document.getElementById(`panel-${tabId}`).classList.add('active');
+
+            // Set Title text
+            const titleMap = {
+                performance: "Strategy Performance & Charts",
+                configs: "Quantitative System Configuration Editor",
+                runner: "Backtesting Simulator Execution Console"
+            };
+            document.getElementById('panel-title-text').innerText = titleMap[tabId];
+            
+            // Reload specific elements on tab enter
+            if (tabId === 'performance') {
+                fetchMetrics();
+                // refresh chart iframe src
+                loadChart(activeChartName);
+            }
+        }
+
+        // ─── Metrics Ingestion ───
+        async function fetchMetrics() {
+            try {
+                const response = await fetch('/api/metrics');
+                const data = await response.json();
+                
+                const grid = document.getElementById('metrics-container');
+                
+                if (data.error) {
+                    grid.innerHTML = `
+                        <div style="grid-column: 1/-1; background: rgba(255, 71, 87, 0.1); border: 1px dashed var(--danger-color); padding: 15px; border-radius: 8px; text-align: center;">
+                            ⚠️ ${data.error}
+                        </div>
+                    `;
+                    return;
+                }
+
+                // Render metrics cards
+                const requiredMetrics = [
+                    { key: "CAGR", label: "CAGR", colorClass: "positive" },
+                    { key: "Sharpe Ratio", label: "Sharpe Ratio", colorClass: "" },
+                    { key: "Max Drawdown", label: "Max Drawdown", colorClass: "negative" },
+                    { key: "Win Rate", label: "Win Rate", colorClass: "" },
+                    { key: "Total Trades", label: "Total Trades", colorClass: "" },
+                    { key: "Start Date", label: "Start Date", colorClass: "" },
+                    { key: "End Date", label: "End Date", colorClass: "" }
+                ];
+
+                let html = '';
+                requiredMetrics.forEach(m => {
+                    let val = data[m.key] || 'N/A';
+                    let valClass = m.colorClass;
+                    
+                    if (m.key === "CAGR" && parseFloat(val) < 0) valClass = "negative";
+                    
+                    html += `
+                        <div class="metric-card">
+                            <span class="metric-title">${m.label}</span>
+                            <span class="metric-value ${valClass}">${val}</span>
+                        </div>
+                    `;
+                });
+                grid.innerHTML = html;
+            } catch (err) {
+                console.error("Error fetching metrics:", err);
+            }
+        }
+
+        // ─── Chart Display ───
+        function loadChart(chartName) {
+            activeChartName = chartName;
+            
+            // Update active states in buttons
+            document.querySelectorAll('.chart-btn').forEach(btn => btn.classList.remove('active'));
+            
+            const btnIdMap = {
+                equity_curve: 'chart-btn-equity',
+                drawdown_curve: 'chart-btn-drawdown',
+                monthly_heatmap: 'chart-btn-heatmap',
+                rolling_metrics: 'chart-btn-metrics',
+                meta_allocation: 'chart-btn-weights',
+                regime_overlay: 'chart-btn-regime'
+            };
+            
+            const targetBtn = document.getElementById(btnIdMap[chartName]);
+            if (targetBtn) targetBtn.classList.add('active');
+
+            const iframe = document.getElementById('chart-viewer');
+            const placeholder = document.getElementById('chart-no-data');
+            
+            // Load file inside outputs via static server route
+            const srcUrl = `/outputs/${chartName}.html`;
+            
+            iframe.style.display = 'block';
+            placeholder.style.display = 'none';
+            
+            // Trigger iframe load. On error or empty, show placeholder
+            iframe.src = srcUrl;
+        }
+
+        // ─── Configuration Manager ───
+        async function reloadConfigs() {
+            try {
+                const response = await fetch('/api/configs');
+                const data = await response.json();
+                rawConfigs = data;
+                
+                // Set text area value
+                document.getElementById('config-textarea').value = rawConfigs[activeConfigTab];
+            } catch (err) {
+                showToast("Error loading configurations", "error");
+            }
+        }
+
+        function switchConfig(configKey) {
+            // Save current edits back to local state object first
+            rawConfigs[activeConfigTab] = document.getElementById('config-textarea').value;
+
+            // Toggle active tabs
+            document.querySelectorAll('.config-selector-btn').forEach(btn => btn.classList.remove('active'));
+            document.getElementById(`config-btn-${configKey}`).classList.add('active');
+            
+            activeConfigTab = configKey;
+            document.getElementById('config-editor-desc').innerText = configDescriptions[configKey];
+            
+            // Set value
+            document.getElementById('config-textarea').value = rawConfigs[configKey];
+        }
+
+        async function saveConfigs() {
+            // Update current tab contents to state
+            rawConfigs[activeConfigTab] = document.getElementById('config-textarea').value;
+
+            try {
+                const response = await fetch('/api/configs', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(rawConfigs)
+                });
+                
+                const data = await response.json();
+                if (data.status === "SUCCESS") {
+                    showToast("Configurations saved successfully!", "success");
+                } else {
+                    showToast(data.message || "Failed to save configuration.", "error");
+                }
+            } catch (err) {
+                showToast("Network error saving configurations", "error");
+            }
+        }
+
+        // ─── Backtest Runner Console ───
+        async function checkRunningStatus() {
+            try {
+                const response = await fetch('/api/logs');
+                const data = await response.json();
+                updateBadgeStatus(data.status);
+                
+                if (data.status === "RUNNING") {
+                    isRunningBacktest = true;
+                    disableRunButton(true);
+                    startLogPolling();
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        async function startBacktest() {
+            if (isRunningBacktest) return;
+            
+            const period = document.getElementById('run-period').value;
+            const forceRefresh = document.getElementById('run-refresh').checked;
+            
+            try {
+                const response = await fetch('/api/run-backtest', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ period, force_refresh: forceRefresh })
+                });
+                
+                const data = await response.json();
+                if (response.ok) {
+                    isRunningBacktest = true;
+                    disableRunButton(true);
+                    updateBadgeStatus("RUNNING");
+                    showToast("Backtest simulation started.", "success");
+                    startLogPolling();
+                } else {
+                    showToast(data.message || "Failed to run simulation.", "error");
+                }
+            } catch (err) {
+                showToast("Network error running backtest.", "error");
+            }
+        }
+
+        function startLogPolling() {
+            if (logsInterval) clearInterval(logsInterval);
+            
+            logsInterval = setInterval(async () => {
+                try {
+                    const response = await fetch('/api/logs');
+                    const data = await response.json();
+                    
+                    const consoleEl = document.getElementById('terminal-body');
+                    consoleEl.innerText = data.logs;
+                    consoleEl.scrollTop = consoleEl.scrollHeight; // Auto scroll to bottom
+                    
+                    updateBadgeStatus(data.status);
+                    
+                    if (data.status !== "RUNNING") {
+                        clearInterval(logsInterval);
+                        logsInterval = null;
+                        isRunningBacktest = false;
+                        disableRunButton(false);
+                        fetchMetrics(); // Refresh stats automatically
+                        
+                        if (data.status === "SUCCESS") {
+                            showToast("Simulation backtest completed!", "success");
+                        } else {
+                            showToast("Simulation execution failed.", "error");
+                        }
+                    }
+                } catch (err) {
+                    console.error("Error polling logs:", err);
+                }
+            }, 1000);
+        }
+
+        function disableRunButton(state) {
+            const btn = document.getElementById('run-btn');
+            btn.disabled = state;
+            if (state) {
+                btn.style.opacity = '0.5';
+                btn.innerText = "⏳ Simulation Running...";
+            } else {
+                btn.style.opacity = '1';
+                btn.innerText = "⚡ Run Backtest Engine";
+            }
+        }
+
+        function updateBadgeStatus(status) {
+            const badge = document.getElementById('runner-status-badge');
+            badge.innerText = status;
+            
+            badge.className = "status-badge"; // Reset classes
+            if (status === "IDLE") badge.classList.add('status-idle');
+            else if (status === "RUNNING") badge.classList.add('status-running');
+            else if (status === "SUCCESS") badge.classList.add('status-success');
+            else if (status === "FAILED") badge.classList.add('status-failed');
+        }
+
+        function clearConsole() {
+            document.getElementById('terminal-body').innerText = "--- Logs Cleared ---";
+        }
+
+        // ─── Notifications Toast ───
+        function showToast(message, type = "success") {
+            const toast = document.getElementById('notification-toast');
+            const icon = document.getElementById('toast-icon');
+            const text = document.getElementById('toast-message');
+            
+            toast.className = "toast"; // Reset
+            if (type === "success") {
+                toast.classList.add('toast-success');
+                icon.innerText = "✓";
+            } else {
+                toast.classList.add('toast-error');
+                icon.innerText = "⚠️";
+            }
+            
+            text.innerText = message;
+            toast.classList.add('show');
+            
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 4000);
+        }
+    </script>
+</body>
+</html>

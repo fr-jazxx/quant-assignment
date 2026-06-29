@@ -235,6 +235,11 @@ def main(
     monthly_table = compute_monthly_return_table(result.equity_curve)
     monthly_table.to_csv(output_path / "monthly_returns.csv")
 
+    # Save metrics JSON for dashboard
+    import json
+    with open(output_path / "metrics.json", "w") as f:
+        json.dump(metrics.to_dict(), f, indent=4)
+
     logger.info(f"Output files saved → {output_path.resolve()}")
 
     # ── 12. Generate charts ────────────────────────────────────────────────
