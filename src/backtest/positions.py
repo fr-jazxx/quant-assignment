@@ -1,18 +1,7 @@
 """
-Portfolio positions tracker — maintains the state of holdings,
-cash, and portfolio value throughout a backtest simulation.
+Portfolio positions tracker.
 
-This module tracks:
-    - Current holdings (shares held per symbol)
-    - Cash balance
-    - Portfolio value (cash + market value of holdings)
-    - Trade history (blotter)
-    - Daily P&L attribution
-
-Design Principles:
-    - Immutable snapshots: each day produces a frozen record of state.
-    - No implicit assumptions: missing prices are handled explicitly.
-    - Cash must never go negative (enforced with assertion).
+Maintains the state of holdings, cash balance, trade blotter history, and daily valuations.
 """
 
 from __future__ import annotations
@@ -56,13 +45,7 @@ class TradeRecord:
 
 
 class PositionsTracker:
-    """Tracks portfolio state through a backtest.
-
-    Usage:
-        tracker = PositionsTracker(initial_capital=10_000_000)
-        tracker.update(date, prices, target_weights, cost_model)
-        snapshots = tracker.get_snapshots()
-    """
+    """Tracks portfolio state through a backtest."""
 
     def __init__(self, initial_capital: float) -> None:
         if initial_capital <= 0:
@@ -88,7 +71,6 @@ class PositionsTracker:
             if price is not None and not np.isnan(price) and price > 0:
                 value += shares * price
             elif shares > 0:
-                # Missing price — log warning, value at 0 (conservative)
                 logger.warning(
                     f"No price for held position: {symbol} ({shares:.0f} shares). "
                     f"Valuing at 0 — check for delisting."
@@ -116,7 +98,7 @@ class PositionsTracker:
         date: pd.Timestamp,
         target_weights: dict[str, float],
         execution_prices: dict[str, float],
-        cost_model,  # CostModel — avoid circular import with string type
+        cost_model,  # CostModel
         cash_buffer: float = 0.02,
     ) -> list[TradeRecord]:
         """Execute trades to move from current holdings to target weights.
@@ -125,17 +107,6 @@ class PositionsTracker:
             - Prices are NEXT DAY OPEN prices (t+1) — no look-ahead bias.
             - Cash buffer is maintained at all times.
             - Sells execute before buys to free up cash.
-            - Weights exceeding hard limits are clipped before execution.
-
-        Args:
-            date: Execution date (t+1 — day after signal generation).
-            target_weights: Dict of symbol → desired portfolio weight.
-            execution_prices: Dict of symbol → open price at execution day.
-            cost_model: CostModel instance.
-            cash_buffer: Minimum fraction of portfolio to keep as cash.
-
-        Returns:
-            List of TradeRecord for this rebalance.
         """
         trades: list[TradeRecord] = []
         portfolio_value = self.get_portfolio_value(execution_prices)
@@ -144,36 +115,33 @@ class PositionsTracker:
             logger.error(f"[{date.date()}] Portfolio value is zero or negative!")
             return trades
 
-        # Scale target weights to investable portion (excluding cash buffer)
+        # 1. Scale target weights to the investable value (excluding the cash buffer)
         investable = portfolio_value * (1.0 - cash_buffer)
-        target_values: dict[str, float] = {
-            symbol: weight * investable
-            for symbol, weight in target_weights.items()
+        target_values = {s: w * investable for s, w in target_weights.items()}
+
+        # 2. Get current values of holdings
+        current_values = {
+            s: shares * execution_prices.get(s, 0.0)
+            for s, shares in self.holdings.items()
+            if execution_prices.get(s, 0.0) > 0
         }
 
-        # Current values
-        current_values: dict[str, float] = {
-            symbol: shares * execution_prices.get(symbol, 0.0)
-            for symbol, shares in self.holdings.items()
-            if execution_prices.get(symbol, 0.0) > 0
-        }
-
-        # ── Determine required trades (sells first, then buys) ──
+        # 3. Identify sells and buys (using a threshold of ₹10 to avoid microscopic trades)
         all_symbols = set(target_values) | set(current_values)
-        sell_trades: list[tuple[str, float]] = []
-        buy_trades: list[tuple[str, float]] = []
+        sell_trades = []
+        buy_trades = []
 
-        for symbol in all_symbols:
-            target_val = target_values.get(symbol, 0.0)
-            current_val = current_values.get(symbol, 0.0)
+        for s in all_symbols:
+            target_val = target_values.get(s, 0.0)
+            current_val = current_values.get(s, 0.0)
             delta = target_val - current_val
 
-            if delta < -10:  # Sell threshold: at least ₹10
-                sell_trades.append((symbol, abs(delta)))
-            elif delta > 10:  # Buy threshold: at least ₹10
-                buy_trades.append((symbol, delta))
+            if delta < -10:
+                sell_trades.append((s, abs(delta)))
+            elif delta > 10:
+                buy_trades.append((s, delta))
 
-        # ── Execute sells ──
+        # 4. Execute sell trades first to free up cash
         for symbol, sell_value in sell_trades:
             price = execution_prices.get(symbol)
             if not price or price <= 0 or np.isnan(price):
@@ -214,7 +182,7 @@ class PositionsTracker:
             trades.append(trade)
             self._blotter.append(trade)
 
-        # ── Execute buys ──
+        # 5. Execute buy trades
         for symbol, buy_value in buy_trades:
             price = execution_prices.get(symbol)
             if not price or price <= 0 or np.isnan(price):

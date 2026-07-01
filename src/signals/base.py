@@ -1,17 +1,8 @@
 """
 Abstract base class for all trading signals.
 
-Every signal must implement generate() which returns a DataFrame of
-weights indexed by date and symbol. Weights represent desired portfolio
-allocation — they are NOT guaranteed to sum to 1.0. The portfolio
-construction layer handles normalisation and constraints.
-
-Signal Design Contract:
-    - generate() must only use data available UP TO date t.
-    - The returned weights are applied at open of date t+1 (enforced by engine).
-    - Weights of 0.0 mean "no position" (not "sell short").
-    - NaN weights mean "unknown / insufficient data" — engine will skip.
-    - All signals must declare their rebalance_freq for the scheduler.
+Signals must implement generate() to return target weights by date and symbol.
+Normalisation and risk limits are applied separately in the portfolio construction layer.
 """
 
 from __future__ import annotations

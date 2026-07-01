@@ -1,38 +1,8 @@
 """
-Signal 2: Short-Term Mean Reversion (RSI + Z-Score)
+Signal 2: Short-Term Mean Reversion (RSI + Z-Score).
 
-Economic Rationale:
-    De Bondt and Thaler (1985) documented that stocks experiencing extreme
-    negative short-term returns tend to rebound — the market "overreacts"
-    to recent information. At shorter horizons (days to weeks), this is
-    amplified by:
-      - Liquidity-driven selling pressure: forced liquidations push prices
-        temporarily below fair value
-      - Market microstructure: bid-ask bounce, inventory risk in market-making
-      - Panic selling by retail investors during sharp drawdowns
-
-    This signal uses two complementary measures of oversold conditions:
-      1. RSI (Relative Strength Index): captures momentum exhaustion
-      2. Z-score: captures statistical deviation from recent mean
-
-    The signal is CONTRARIAN — it bets that recent losers will recover.
-    It is intentionally designed to be negatively correlated with the
-    momentum signal, providing diversification at the portfolio level.
-
-Failure Conditions:
-    - Value traps: Some stocks are "cheap" for fundamental reasons and
-      continue declining. Without fundamental data, we cannot distinguish.
-    - Trend continuation: In strongly trending down-markets, mean reversion
-      signals generate sustained false positives ("catching falling knives").
-    - Sector crashes: Industry-wide shocks don't revert quickly.
-
-References:
-    - De Bondt, W.F.M. & Thaler, R. (1985). Does the Stock Market Overreact?
-      Journal of Finance, 40(3).
-    - Lehmann, B.N. (1990). Fads, Martingales, and Market Efficiency.
-      Quarterly Journal of Economics, 105(1).
-    - Jegadeesh, N. (1990). Evidence of Predictable Behavior of Security Returns.
-      Journal of Finance, 45(3).
+A contrarian strategy targeting short-term oversold conditions.
+Uses RSI(5) and price Z-score(20) to identify candidate stocks for weekly entry and exit.
 """
 
 from __future__ import annotations
@@ -47,22 +17,7 @@ from src.utils.logger import logger
 
 
 class MeanReversionSignal(BaseSignal):
-    """Short-term mean reversion signal using RSI and price z-score.
-
-    Entry (long) conditions on date t:
-        - RSI(5) < oversold_threshold (default: 30), OR
-        - Z-score(20) < -zscore_threshold (default: -2.0)
-
-    Exit conditions:
-        - RSI(5) > rsi_exit (default: 50), OR
-        - Z-score returns to > 0 (mean)
-
-    On each weekly rebalance:
-        1. Identify all stocks meeting entry conditions.
-        2. Rank by RSI ascending (most oversold first).
-        3. Select top max_positions stocks.
-        4. Assign equal weight.
-    """
+    """Short-term mean reversion signal using RSI and price z-score."""
 
     def __init__(self, cfg: MeanReversionSignalConfig) -> None:
         self._cfg = cfg
@@ -95,21 +50,17 @@ class MeanReversionSignal(BaseSignal):
             f"Z({cfg.zscore_window}) < {cfg.zscore_threshold}"
         )
 
-        # ── Compute indicators ──
+        # 1. Compute indicators (RSI and Price Z-score)
         rsi = compute_rsi(prices, window=cfg.rsi_window)
         zscore = compute_zscore(prices, window=cfg.zscore_window)
 
-        # ── Entry signals: either RSI oversold OR z-score extreme ──
-        rsi_signal = rsi < cfg.rsi_oversold         # True = oversold by RSI
-        zscore_signal = zscore < cfg.zscore_threshold  # True = oversold by z-score
-        entry_signal = rsi_signal | zscore_signal    # Union of both
+        # 2. Define Entry signals (RSI oversold OR Z-score extreme)
+        entry_signal = (rsi < cfg.rsi_oversold) | (zscore < cfg.zscore_threshold)
 
-        # ── Exit signals ──
-        rsi_exit = rsi > cfg.rsi_exit
-        zscore_exit = zscore > 0.0
-        exit_signal = rsi_exit & zscore_exit         # Both must recover
+        # 3. Define Exit signals (RSI exits oversold AND Z-score rises above mean)
+        exit_signal = (rsi > cfg.rsi_exit) & (zscore > 0.0)
 
-        # ── Build weights on each weekly rebalance date ──
+        # 4. Generate equal weights weekly for active entries
         weights_all = pd.DataFrame(
             np.nan, index=prices.index, columns=prices.columns
         )
@@ -121,7 +72,7 @@ class MeanReversionSignal(BaseSignal):
             if date not in entry_signal.index:
                 continue
 
-            # Skip if insufficient history
+            # Skip dates with insufficient price history
             lookback_start = prices.index[
                 max(0, prices.index.get_loc(date) - cfg.min_history_days)
             ]
@@ -140,11 +91,10 @@ class MeanReversionSignal(BaseSignal):
                 )
                 active_positions -= exiting
 
-            # Add new entry positions
+            # Add new entry positions, prioritizing the most oversold by RSI
             if date in entry_signal.index:
                 entry_row = entry_signal.loc[date]
                 new_entries = set(entry_row[entry_row].index.tolist())
-                # Rank by RSI ascending (most oversold first) for tie-breaking
                 rsi_row = rsi.loc[date]
                 new_entries_ranked = (
                     rsi_row[list(new_entries)]
@@ -154,14 +104,14 @@ class MeanReversionSignal(BaseSignal):
                 )
                 active_positions.update(new_entries_ranked)
 
-            # Enforce max_positions cap (keep most oversold)
+            # Cap active positions to max limit
             if len(active_positions) > cfg.max_positions:
                 rsi_row = rsi.loc[date].reindex(list(active_positions))
                 active_positions = set(
                     rsi_row.nsmallest(cfg.max_positions).index.tolist()
                 )
 
-            # Assign equal weights
+            # Assign equal weights to active holdings
             if active_positions:
                 valid_positions = [
                     s for s in active_positions
@@ -177,10 +127,10 @@ class MeanReversionSignal(BaseSignal):
             else:
                 weights_all.loc[date] = 0.0
 
-        # Forward-fill between rebalance dates
+        # Hold weights constant between rebalance dates
         weights_filled = weights_all.ffill().fillna(0.0)
 
-        # Zero-out where prices are missing
+        # Zero-out weights where price is missing (delistings / gaps)
         weights_filled = weights_filled.where(prices.notna(), 0.0)
 
         logger.info(
@@ -192,13 +142,13 @@ class MeanReversionSignal(BaseSignal):
         return SignalOutput(
             name=self.name,
             weights=weights_filled,
-            scores=rsi,  # RSI as the primary score
+            scores=rsi,
             metadata={"zscore": zscore},
         )
 
     @staticmethod
     def _get_weekly_rebalance_dates(index: pd.DatetimeIndex) -> pd.DatetimeIndex:
-        """Return last trading day of each week (Friday or last available)."""
+        """Return last trading day of each week."""
         series = pd.Series(index, index=index)
         weekly = series.resample("W").last()
         return pd.DatetimeIndex(weekly.dropna().values)

@@ -1,29 +1,10 @@
 """
 Core backtesting engine.
 
-This engine simulates a realistic daily portfolio simulation with:
-    - NO look-ahead bias: signal computed at close of t, executed at open of t+1
-    - Transaction costs and slippage applied on every trade
-    - Cash tracking with no implicit leverage
-    - Handling of missing prices (delisting, data gaps)
-    - Multiple strategy sleeves with meta-allocation weights
-
-Engine Flow (per trading day):
-    1. Check if today is a rebalance date for any signal.
-    2. If rebalance → generate target weights from signals.
-    3. Apply meta-allocator weights to combine signal outputs.
-    4. Apply regime multiplier to scale overall risk.
-    5. Apply portfolio constraints (max weight, max positions, cash buffer).
-    6. At open of NEXT day (t+1): execute trades at open prices.
-    7. At close of day: value portfolio at close prices.
-    8. Record daily P&L, holdings, and trade blotter.
-
-Execution Assumption:
-    Trades execute at the OPEN price of t+1. This is conservative because:
-      - It introduces a realistic 1-day delay between signal and execution.
-      - It avoids using same-day close prices for both signal and execution.
-      - In practice, execution quality may be better or worse, depending on
-        order size, time of day, and market conditions.
+Simulates a daily portfolio with:
+    - No look-ahead bias (signals generated at t, executed at t+1 open).
+    - Fully-tracked cash, transaction costs, and slippage.
+    - Multiple strategy sleeves combined with dynamic meta-allocation weights.
 """
 
 from __future__ import annotations
@@ -74,18 +55,13 @@ class BacktestResult:
 
 
 class BacktestEngine:
-    """Event-driven backtesting engine for multi-signal portfolio simulation.
-
-    Orchestrates signal generation, meta-allocation, portfolio construction,
-    and trade execution across the full backtest date range.
-    """
+    """Event-driven backtesting engine for multi-signal portfolio simulation."""
 
     def __init__(self, config: AppConfig) -> None:
         self.config = config
         self.cost_model = CostModel(config.backtest)
         self.constructor = PortfolioConstructor(config.backtest)
 
-        # Log estimated round-trip cost
         rt_bps = self.cost_model.round_trip_bps_estimate
         logger.info(
             f"BacktestEngine initialised | "
@@ -110,8 +86,7 @@ class BacktestEngine:
             meta_weights: DataFrame of (Date × signal_name) meta-allocation weights.
             regime_multiplier: Series (Date) of risk multiplier in [0, 1].
             benchmark_prices: Series of benchmark adjusted close prices.
-            open_prices: Optional open price panel. If None, uses close prices
-                         shifted by 1 day as execution price proxy.
+            open_prices: Optional open price panel.
 
         Returns:
             BacktestResult with all simulation outputs.
@@ -121,27 +96,21 @@ class BacktestEngine:
 
         tracker = PositionsTracker(initial_capital=initial_capital)
 
-        # ── Execution prices: open of next day ──
+        # 1. Determine execution prices (prefer Open prices; fallback to Close prices)
         if open_prices is not None:
             exec_prices = open_prices
         else:
-            # Fallback: use close prices as execution proxy
-            # In reality, opening prices differ — this is a simplification
-            # that we document as a limitation.
-            logger.warning(
-                "No open prices provided — using close prices as execution proxy. "
-                "This slightly understates transaction costs."
-            )
+            logger.warning("No open prices provided — using close prices as execution proxy.")
             exec_prices = prices
 
-        # ── Align all date indices ──
+        # 2. Align trading date range
         trading_dates = prices.index
         logger.info(
             f"Backtest period: {trading_dates[0].date()} → {trading_dates[-1].date()} "
             f"({len(trading_dates)} trading days)"
         )
 
-        # ── Combine signal weights using meta-allocation ──
+        # 3. Combine underlying signals using meta-allocation weights
         combined_weights = self._combine_signals(
             signal_outputs=signal_outputs,
             meta_weights=meta_weights,
@@ -149,12 +118,12 @@ class BacktestEngine:
             price_index=trading_dates,
         )
 
-        # ── Daily simulation loop ──
-        pending_rebalance: dict[str, float] | None = None  # target weights for t+1
+        # 4. Daily simulation loop
+        pending_rebalance: dict[str, float] | None = None
         pending_rebalance_date: pd.Timestamp | None = None
 
         for i, date in enumerate(tqdm(trading_dates, desc="Backtesting")):
-            # ── Execute pending rebalance (from yesterday's signal) ──
+            # Execute pending rebalance from the prior day's signals
             if pending_rebalance is not None and pending_rebalance_date is not None:
                 exec_price_row = exec_prices.loc[date] if date in exec_prices.index else None
                 if exec_price_row is not None:
@@ -170,13 +139,12 @@ class BacktestEngine:
                 pending_rebalance = None
                 pending_rebalance_date = None
 
-            # ── Check if today generates a new signal ──
+            # Calculate and store targets for the next day if a new signal is generated
             if date in combined_weights.index:
                 target_row = combined_weights.loc[date]
                 target_dict = target_row[target_row > 0].to_dict()
 
                 if target_dict:
-                    # Apply portfolio constraints
                     constrained = self.constructor.apply_constraints(
                         target_dict,
                         prices.loc[date].to_dict() if date in prices.index else {},
@@ -184,7 +152,7 @@ class BacktestEngine:
                     pending_rebalance = constrained
                     pending_rebalance_date = date
 
-            # ── Record end-of-day portfolio value ──
+            # Record end-of-day portfolio valuation
             close_price_row = prices.loc[date] if date in prices.index else pd.Series()
             close_price_dict = close_price_row.dropna().to_dict()
             tracker.record_daily_value(date, close_price_dict)

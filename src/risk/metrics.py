@@ -1,19 +1,5 @@
 """
-Risk and performance metrics.
-
-All metrics follow standard quantitative finance conventions:
-    - Returns are daily (not log returns) unless noted.
-    - Annualisation uses 252 trading days.
-    - Risk-free rate defaults to 6.5% (approx India 91-day T-bill, 2023).
-    - Sharpe ratio uses excess returns over risk-free rate.
-    - Sortino ratio uses downside deviation (negative returns only).
-    - Maximum drawdown is peak-to-trough decline in portfolio value.
-
-References:
-    - Sharpe, W.F. (1966). Mutual Fund Performance. Journal of Business, 39(1).
-    - Lo, A. (2002). The Statistics of Sharpe Ratios. FAJ, 58(4).
-    - Sortino, F. & van der Meer, R. (1991). Downside Risk. JPM, 17(4).
-    - Calmar, F. (1991). Calmar Ratio. Futures Magazine.
+Risk and performance metrics for portfolio backtest analysis.
 """
 
 from __future__ import annotations

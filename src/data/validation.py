@@ -1,17 +1,7 @@
 """
-Data validation layer — enforces the data contract before any data
-flows into signals or the backtesting engine.
+Data Validation Layer.
 
-Data Contract:
-    - Column set: ['Open', 'High', 'Low', 'Close', 'Volume', 'Adj Close']
-    - Index: DatetimeIndex, timezone-naive, business-day frequency
-    - No duplicate dates per symbol
-    - No future timestamps
-    - No negative prices or volumes
-    - No more than config.max_fill_days consecutive NaN values
-    - Adjusted vs unadjusted prices clearly labelled
-
-Failures are logged and reported — they do not silently propagate.
+Enforces price/volume data integrity checks (missing columns, duplicates, future timestamps, negative values).
 """
 
 from __future__ import annotations
@@ -25,7 +15,7 @@ import numpy as np
 from src.utils.logger import logger
 
 
-# ─── Expected Data Contract ───────────────────────────────────────────────────
+# Expected Columns
 
 REQUIRED_COLUMNS: list[str] = ["Open", "High", "Low", "Close", "Volume", "Adj Close"]
 PRICE_COLUMNS: list[str] = ["Open", "High", "Low", "Close", "Adj Close"]
@@ -56,7 +46,7 @@ class ValidationReport:
         )
 
 
-# ─── Validators ───────────────────────────────────────────────────────────────
+# Validators
 
 def validate_columns(df: pd.DataFrame, symbol: str, report: ValidationReport) -> pd.DataFrame:
     """Ensure all required columns are present."""
@@ -72,7 +62,6 @@ def validate_index(df: pd.DataFrame, symbol: str, report: ValidationReport) -> p
         report.add_issue("Index is not DatetimeIndex", critical=True)
         return df
 
-    # Strip timezone info for consistent comparison
     if df.index.tz is not None:
         df = df.copy()
         df.index = df.index.tz_localize(None)
@@ -87,7 +76,7 @@ def validate_no_duplicates(df: pd.DataFrame, symbol: str, report: ValidationRepo
     if n_dups > 0:
         report.add_issue(
             f"Found {n_dups} duplicate timestamps — keeping first occurrence",
-            critical=False,  # Non-critical: we can fix it
+            critical=False,
         )
         df = df[~df.index.duplicated(keep="first")]
     return df
@@ -97,7 +86,7 @@ def validate_no_future_timestamps(
     df: pd.DataFrame, symbol: str, report: ValidationReport
 ) -> pd.DataFrame:
     """Reject rows with timestamps in the future."""
-    now = pd.Timestamp("today").normalize()  # Today's date, timezone-naive
+    now = pd.Timestamp("today").normalize()
     future_mask = df.index > now
     n_future = future_mask.sum()
     if n_future > 0:
@@ -151,11 +140,7 @@ def validate_no_large_gaps(
     report: ValidationReport,
     max_fill_days: int = 3,
 ) -> pd.DataFrame:
-    """Detect consecutive NaN runs exceeding the allowed fill window.
-
-    Forward-fills up to max_fill_days. Beyond that, rows remain NaN
-    so the downstream system can detect and exclude them.
-    """
+    """Detect consecutive NaN runs exceeding the allowed fill window."""
     for col in PRICE_COLUMNS:
         if col not in df.columns:
             continue
@@ -174,7 +159,6 @@ def validate_no_large_gaps(
                 critical=False,
             )
 
-    # Forward-fill up to max_fill_days
     df = df.copy()
     df[PRICE_COLUMNS] = df[PRICE_COLUMNS].ffill(limit=max_fill_days)
     return df
@@ -183,7 +167,7 @@ def validate_no_large_gaps(
 def validate_ohlc_consistency(
     df: pd.DataFrame, symbol: str, report: ValidationReport
 ) -> pd.DataFrame:
-    """Check that OHLC values are internally consistent (High >= Low, etc.)."""
+    """Check that OHLC values are internally consistent (High >= Low)."""
     required = {"Open", "High", "Low", "Close"}
     if not required.issubset(df.columns):
         return df
@@ -198,7 +182,7 @@ def validate_ohlc_consistency(
     return df
 
 
-# ─── Main Validate Function ───────────────────────────────────────────────────
+# Main Validation Functions
 
 def validate_ohlcv(
     df: pd.DataFrame,

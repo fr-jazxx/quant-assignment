@@ -1,34 +1,8 @@
 """
-Meta-Allocation Layer — dynamically allocates capital across strategy sleeves.
+Meta-Allocation Layer.
 
-Philosophy:
-    The meta-allocator is the "fund of funds" layer of this system. Instead of
-    committing 100% to a single signal, it distributes capital based on the
-    recent performance, drawdown state, and correlation of each strategy.
-
-    This is inspired by risk-parity and adaptive allocation literature:
-      - Bridgewater's All Weather: allocate to risk, not dollars
-      - AQR's multi-strategy: scale up strategies with recent positive SR
-      - RPM (Risk-Parity + Momentum): combine both concepts
-
-    Key design decisions:
-      1. Rule-based (not ML-based): Transparent, interpretable, avoids
-         overfitting to the training period.
-      2. Uses rolling metrics computed on OUT-OF-BAND returns: the
-         meta-allocator sees signal PnL, not raw prices — reducing leakage.
-      3. Drawdown gate: Hard risk reduction prevents catastrophic losses
-         from a single strategy.
-
-Meta-Allocation Formula:
-    For each strategy i on date t:
-        raw_score_i = max(0, rolling_sharpe_i(t))
-        drawdown_factor_i = 0.5 if in_drawdown > threshold else 1.0
-        correlation_penalty_i = 1.0 - max(0, correlation_with_others - threshold)
-        adjusted_score_i = raw_score_i × drawdown_factor_i × correlation_penalty_i
-
-    Normalised weight_i = adjusted_score_i / sum(adjusted_score_j)
-
-    Final weight = max(min_weight, weight_i) if raw_score_i > 0 else 0.0
+Dynamically allocates capital across different strategies (sleeves)
+based on their rolling Sharpe ratio, drawdown state, and pairwise correlation.
 """
 
 from __future__ import annotations
@@ -43,13 +17,7 @@ from src.utils.logger import logger
 class MetaAllocator:
     """Rule-based dynamic strategy allocation.
 
-    Allocates capital among strategy sleeves based on:
-        1. Rolling Sharpe ratio (performance quality)
-        2. Drawdown gate (risk protection)
-        3. Correlation check (diversification preservation)
-
-    The meta-allocation is recomputed on each rebalance date.
-    Between rebalance dates, weights are held constant (forward-filled).
+    Distributes portfolio capital based on Sharpe ratio, drawdown gating, and correlation.
     """
 
     def __init__(self, cfg: MetaAllocatorConfig) -> None:
@@ -63,14 +31,11 @@ class MetaAllocator:
         """Compute dynamic meta-allocation weights over time.
 
         Args:
-            strategy_returns: DataFrame (Date × strategy_name) of daily returns
-                              for each strategy sleeve. This is computed from
-                              the signal weights applied to the market data.
+            strategy_returns: DataFrame (Date × strategy_name) of daily returns.
             rebalance_dates: Dates on which to recompute weights.
 
         Returns:
             DataFrame (Date × strategy_name) of normalised allocation weights.
-            Index covers all dates in strategy_returns.index.
         """
         cfg = self._cfg
         strategies = strategy_returns.columns.tolist()
@@ -81,12 +46,11 @@ class MetaAllocator:
             f"{len(strategy_returns)} days"
         )
 
-        # Initialise weights — equal weight as default
         all_weights = pd.DataFrame(
             np.nan, index=strategy_returns.index, columns=strategies
         )
 
-        # ── Compute rolling metrics ──
+        # Compute rolling performance and risk metrics
         rolling_sharpe = self._compute_rolling_sharpe(strategy_returns, cfg)
         running_drawdown = self._compute_drawdown(strategy_returns)
         rolling_corr = strategy_returns.rolling(
@@ -99,14 +63,14 @@ class MetaAllocator:
             if date not in strategy_returns.index:
                 continue
 
-            # ── Step 1: Raw score = max(0, rolling Sharpe) ──
+            # 1. Base Score: max(0, rolling Sharpe ratio)
             sharpe_row = rolling_sharpe.loc[date] if date in rolling_sharpe.index else pd.Series()
             raw_scores: dict[str, float] = {}
             for s in strategies:
                 sr = sharpe_row.get(s, np.nan)
                 raw_scores[s] = max(0.0, sr) if not np.isnan(sr) else 0.0
 
-            # ── Step 2: Drawdown gate ──
+            # 2. Drawdown Gate: cut allocation if strategy drawdown exceeds threshold
             dd_row = running_drawdown.loc[date] if date in running_drawdown.index else pd.Series()
             drawdown_factors: dict[str, float] = {}
             for s in strategies:
@@ -120,7 +84,7 @@ class MetaAllocator:
                 else:
                     drawdown_factors[s] = 1.0
 
-            # ── Step 3: Correlation penalty ──
+            # 3. Correlation Penalty: penalize strategies highly correlated to others
             corr_factors: dict[str, float] = {}
             try:
                 corr_matrix = rolling_corr.loc[date] if date in rolling_corr.index else pd.DataFrame()
@@ -134,7 +98,6 @@ class MetaAllocator:
                         continue
                     max_corr = corr_matrix.loc[s, other_strats].abs().max()
                     if max_corr > cfg.high_correlation_threshold:
-                        # Penalty proportional to excess correlation
                         penalty = 1.0 - (max_corr - cfg.high_correlation_threshold)
                         corr_factors[s] = max(0.1, penalty)
                     else:
@@ -142,7 +105,7 @@ class MetaAllocator:
             except Exception:
                 corr_factors = {s: 1.0 for s in strategies}
 
-            # ── Step 4: Compute adjusted scores ──
+            # 4. Compute adjusted scores
             adjusted: dict[str, float] = {}
             for s in strategies:
                 adjusted[s] = (
@@ -151,11 +114,9 @@ class MetaAllocator:
                     * corr_factors[s]
                 )
 
-            # ── Step 5: Normalise ──
+            # 5. Normalise scores to sum to 1.0 (fallback to equal weight if all scores <= 0)
             total = sum(adjusted.values())
             if total <= 0:
-                # All strategies have non-positive Sharpe — go to equal weight
-                # (could also go to 0 / cash, but equal weight is more conservative)
                 logger.debug(
                     f"[Meta] {date.date()}: All strategy scores ≤ 0, "
                     f"falling back to equal weight"
@@ -164,7 +125,7 @@ class MetaAllocator:
             else:
                 weights = {s: adjusted[s] / total for s in strategies}
 
-            # ── Step 6: Apply minimum weight floor ──
+            # 6. Apply minimum weight floor and re-normalise
             if cfg.normalise_weights:
                 final_weights: dict[str, float] = {}
                 for s in strategies:
@@ -173,7 +134,6 @@ class MetaAllocator:
                     else:
                         final_weights[s] = 0.0
 
-                # Re-normalise after floor application
                 total2 = sum(final_weights.values())
                 if total2 > 0:
                     final_weights = {s: w / total2 for s, w in final_weights.items()}

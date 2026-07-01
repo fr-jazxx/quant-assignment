@@ -1,36 +1,8 @@
 """
-Signal 1: Cross-Sectional Momentum (12-1 Month)
+Signal 1: Cross-Sectional Momentum (12-1 Month).
 
-Economic Rationale:
-    Jegadeesh and Titman (1993) documented that stocks with strong 12-month
-    returns continue to outperform over the next 3-12 months. This anomaly
-    is attributed to behavioural factors:
-      - Underreaction to information: investors are slow to update beliefs
-      - Herding: institutional investors chase performance
-      - Disposition effect: winners are sold too early, losers held too long
-
-    The "12-1" construction (12 months excluding the most recent month) avoids
-    short-term reversal contamination documented by Jegadeesh (1990).
-
-    Indian market evidence: Momentum has been documented in Indian equities
-    by Sehgal & Balakrishnan (2002) and more recently in several NSE working
-    papers, though it is weaker and more crash-prone than in US markets.
-
-Failure Conditions:
-    - Momentum crashes: Following sharp market drawdowns, prior winners
-      crash hardest during recovery as short-sellers cover. March 2020 is
-      a clear example in Indian markets.
-    - Highly correlated market environment: When all stocks move together,
-      cross-sectional dispersion collapses and signal strength deteriorates.
-    - Whipsaw: In choppy, directionless markets, momentum frequently reverses.
-
-References:
-    - Jegadeesh, N. & Titman, S. (1993). Returns to Buying Winners and Selling
-      Losers: Implications for Stock Market Efficiency. Journal of Finance, 48(1).
-    - Asness, C., Moskowitz, T. & Pedersen, L. (2013). Value and Momentum
-      Everywhere. Journal of Finance, 68(3).
-    - Sehgal, S. & Balakrishnan, I. (2002). Contrarian and Momentum Strategies
-      in the Indian Capital Market. Vikalpa, 27(1).
+Ranks stocks by their past 12-month return (excluding the most recent month)
+to capture medium-term trend continuation while avoiding short-term reversal effects.
 """
 
 from __future__ import annotations
@@ -47,15 +19,7 @@ from src.utils.logger import logger
 class MomentumSignal(BaseSignal):
     """Cross-sectional 12-1 month momentum signal.
 
-    Ranks stocks by their past 12-month return (excluding the most recent
-    month) and generates equal weights for the top-N stocks.
-
-    On each rebalance date t:
-        1. Compute return from (t - 252) to (t - 21) for all symbols.
-        2. Rank stocks cross-sectionally.
-        3. Select top_n stocks.
-        4. Assign equal weight to selected stocks (normalised to 1.0 total).
-        5. Apply minimum price and volume filters before ranking.
+    Selects top-N stocks based on past 12-month return (excluding the most recent month).
     """
 
     def __init__(self, cfg: MomentumSignalConfig) -> None:
@@ -90,33 +54,31 @@ class MomentumSignal(BaseSignal):
             f"lookback={cfg.lookback_days}d, skip={cfg.skip_days}d, top_n={cfg.top_n}"
         )
 
-        # ── Step 1: Compute 12-1 rolling returns ──
+        # 1. Compute rolling returns (excluding the most recent skip_days)
         momentum_scores = compute_rolling_returns(
             prices,
             window=cfg.lookback_days,
             skip_days=cfg.skip_days,
         )
 
-        # ── Step 2: Liquidity filter — remove stocks below min price ──
+        # 2. Filter for stocks above minimum price
         price_filter = prices >= cfg.min_price
         momentum_scores = momentum_scores.where(price_filter)
 
-        # ── Step 3: Volume filter (if volume data available) ──
+        # 3. Filter for stocks meeting minimum volume requirement
         if volume is not None:
             vol_30d_avg = volume.rolling(30, min_periods=15).mean()
             volume_filter = vol_30d_avg >= cfg.min_avg_volume_shares
             momentum_scores = momentum_scores.where(volume_filter)
 
-        # ── Step 4: Cross-sectional rank (percentile) ──
+        # 4. Rank stocks cross-sectionally (1 = highest return)
         ranked = cross_sectional_rank(momentum_scores, ascending=True)
-        # ranked is now in [0, 1] where 1 = highest momentum
 
-        # ── Step 5: Select top_n on each date, assign equal weight ──
+        # 5. Generate equal weights for top_n stocks on monthly rebalance dates
         weights_all = pd.DataFrame(
             np.nan, index=prices.index, columns=prices.columns
         )
 
-        # Get rebalance dates
         rebalance_dates = self._get_monthly_rebalance_dates(prices.index)
 
         for date in rebalance_dates:
@@ -138,12 +100,10 @@ class MomentumSignal(BaseSignal):
             row[top_stocks] = weight
             weights_all.loc[date] = row
 
-        # Forward-fill weights between rebalance dates (hold positions)
-        weights_filled = weights_all.ffill()
-        # First valid rebalance: before that, no positions
-        weights_filled = weights_filled.fillna(0.0)
+        # Hold positions between rebalance dates
+        weights_filled = weights_all.ffill().fillna(0.0)
 
-        # Zero-out positions where price data is missing (delisted, etc.)
+        # Zero-out weights where price data is missing (e.g. delisted stocks)
         weights_filled = weights_filled.where(prices.notna(), 0.0)
 
         logger.info(

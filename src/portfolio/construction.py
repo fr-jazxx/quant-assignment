@@ -1,24 +1,8 @@
 """
-Portfolio construction — converts raw signal weights into constrained
-portfolio weights that respect risk limits and capital constraints.
+Portfolio construction.
 
-Constraints applied (in order):
-    1. Maximum single-stock weight cap (hard limit)
-    2. Minimum position weight filter (remove tiny positions)
-    3. Maximum number of positions
-    4. Cash buffer (minimum cash maintained)
-    5. Normalise weights to sum to (1 - cash_buffer)
-
-Design Rationale:
-    These constraints serve risk management and implementation purposes:
-    - Max stock weight: Prevents concentration risk and SEBI large-holder
-      disclosure thresholds for institutional strategies.
-    - Min position weight: Avoids impractical hairline positions that
-      would cost more in transaction costs than they contribute.
-    - Max positions: Limits operational complexity; 40 positions is
-      manageable for a systematic strategy.
-    - Cash buffer: Ensures liquidity for redemptions and prevents
-      forced selling in adverse conditions.
+Applies risk limits and capital constraints to convert raw signal weights
+into constrained, normalised portfolio weights.
 """
 
 from __future__ import annotations
@@ -31,11 +15,7 @@ from src.utils.logger import logger
 
 
 class PortfolioConstructor:
-    """Applies portfolio constraints to raw signal weights.
-
-    All constraints are loaded from BacktestConfig (backtest.yaml),
-    ensuring no hardcoded numbers in logic code.
-    """
+    """Applies portfolio constraints to raw signal weights."""
 
     def __init__(self, cfg: BacktestConfig) -> None:
         self._cfg = cfg.portfolio
@@ -60,7 +40,7 @@ class PortfolioConstructor:
 
         weights = dict(raw_weights)
 
-        # ── Filter out symbols with missing prices ──
+        # 1. Filter out symbols with missing prices
         if prices:
             weights = {
                 s: w
@@ -71,13 +51,13 @@ class PortfolioConstructor:
         if not weights:
             return {}
 
-        # ── Step 1: Remove positions below minimum weight ──
+        # 2. Filter out positions below minimum weight
         weights = {
             s: w for s, w in weights.items()
             if w >= cfg.min_position_weight
         }
 
-        # ── Step 2: Enforce maximum number of positions ──
+        # 3. Limit the maximum number of positions
         if len(weights) > cfg.max_positions:
             weights = dict(
                 sorted(weights.items(), key=lambda x: x[1], reverse=True)[: cfg.max_positions]
@@ -86,42 +66,32 @@ class PortfolioConstructor:
         if not weights:
             return {}
 
-        # ── Step 3: Iterative cap + normalise to investable fraction ──
-        # We use an iterative water-filling algorithm:
-        #   1. Normalise to investable fraction
-        #   2. Cap any stock exceeding max_stock_weight
-        #   3. Redistribute the capped excess proportionally to uncapped stocks
-        #   4. Repeat until no stock exceeds the cap
-        #
-        # Note: if n_stocks × max_stock_weight < investable (too few stocks for
-        # the cap), we cannot satisfy both constraints simultaneously. In that
-        # case, we relax the cap and log a warning. This is correct behaviour —
-        # in practice, the portfolio will have many more stocks than this edge case.
+        # 4. Scale weights and apply maximum single-stock cap via water-filling
         investable = 1.0 - cfg.cash_buffer
         n = len(weights)
         effective_cap = cfg.max_stock_weight
 
-        # Check if cap is satisfiable given the number of stocks
+        # Check if max stock weight cap is mathematically satisfiable
         if n * effective_cap < investable:
-            effective_cap = investable / n  # Relax cap to equal weight
+            effective_cap = investable / n  # Fall back to equal weighting
             logger.debug(
                 f"Max weight cap relaxed to {effective_cap:.3f} — "
                 f"too few stocks ({n}) to satisfy {cfg.max_stock_weight:.1%} cap"
             )
 
-        # Normalise to investable, then iteratively cap
+        # Normalize and iteratively redistribute excess weights
         normalised = {s: (w / sum(weights.values())) * investable for s, w in weights.items()}
         for _ in range(20):
             over_cap = {s: w for s, w in normalised.items() if w > effective_cap + 1e-9}
             if not over_cap:
                 break  # Converged
-            # Redistribute excess from capped stocks to uncapped stocks
+            
             excess = sum(w - effective_cap for w in over_cap.values())
             uncapped = {s: w for s, w in normalised.items() if w <= effective_cap + 1e-9}
-            # Cap the over-weight stocks
+            
+            # Cap excess positions and distribute overflow to uncapped ones
             for s in over_cap:
                 normalised[s] = effective_cap
-            # Distribute excess equally among uncapped
             if uncapped:
                 extra_per = excess / len(uncapped)
                 for s in uncapped:
@@ -133,7 +103,7 @@ class PortfolioConstructor:
             return {}
         normalised = {s: (w / total) * investable for s, w in normalised.items()}
 
-        # ── Sanity checks ──
+        # 5. Sanity checks
         total = sum(normalised.values())
         assert abs(total - investable) < 1e-4, (
             f"Weight normalisation error: sum={total:.6f}, expected={investable:.6f}"

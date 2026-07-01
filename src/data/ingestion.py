@@ -1,24 +1,8 @@
 """
-Data ingestion layer — fetches historical OHLCV data from yfinance,
-caches locally as Parquet files, and returns clean DataFrames.
+Data Ingestion Layer.
 
-Design Decisions & Limitations:
-    - Data source: yfinance (Yahoo Finance)
-    - Prices: Adjusted Close is used as the primary price for returns.
-      Unadjusted OHLCV is retained for volume-based filters.
-    - Corporate actions: yfinance applies split/dividend adjustments
-      retroactively to ALL historical data. This means the adjusted
-      price history changes over time. This is NOT point-in-time accurate.
-    - Survivorship bias: The symbol list is static (as of Dec 2023).
-      Delisted companies that exited NIFTY 100 before this date are
-      excluded. This introduces upward bias in backtested returns.
-    - Intraday data: Not available. All signals use End-of-Day (EOD) data.
-    - All limitations are documented in the research report.
-
-Cache:
-    - First fetch is stored as Parquet in data_cache/<symbol>.parquet.
-    - Subsequent runs load from cache unless force_refresh=True.
-    - Cache key is: symbol + date range (stale cache is detected by range).
+Fetches historical market data from yfinance and caches it locally as Parquet files
+to optimize speed and network usage.
 """
 
 from __future__ import annotations
@@ -36,7 +20,7 @@ from src.utils.config import UniverseConfig, BacktestConfig
 from src.utils.logger import logger
 
 
-# ─── Cache Utilities ──────────────────────────────────────────────────────────
+# Cache Utilities
 
 def _cache_path(cache_dir: Path, symbol: str) -> Path:
     """Return the Parquet file path for a given symbol."""
@@ -49,12 +33,7 @@ def _is_cache_valid(
     start: pd.Timestamp,
     end: pd.Timestamp,
 ) -> bool:
-    """Check whether the cached file covers the required date range.
-
-    A cache is considered valid if:
-        1. The file exists.
-        2. The cached data's index covers [start, end].
-    """
+    """Check whether the cached file covers the required date range."""
     if not path.exists():
         return False
     try:
@@ -84,7 +63,7 @@ def _load_cache(path: Path) -> pd.DataFrame:
     return df
 
 
-# ─── Single Symbol Fetch ──────────────────────────────────────────────────────
+# Single Symbol Fetch
 
 def fetch_symbol(
     symbol: str,
@@ -99,32 +78,18 @@ def fetch_symbol(
 
     Uses local Parquet cache to avoid redundant network calls.
     Returns None if the symbol is unavailable after retries.
-
-    Args:
-        symbol: Ticker with exchange suffix (e.g. 'TCS.NS').
-        start: Start date string or Timestamp.
-        end: End date string or Timestamp.
-        cache_dir: Directory to read/write Parquet cache.
-        force_refresh: If True, bypass cache and re-fetch from yfinance.
-        retry_count: Number of retry attempts on network failure.
-        retry_delay: Seconds to wait between retries.
-
-    Returns:
-        DataFrame with columns [Open, High, Low, Close, Volume, Adj Close]
-        or None if fetching failed.
     """
     start_ts = pd.Timestamp(start)
     end_ts = pd.Timestamp(end)
     cache_file = _cache_path(cache_dir, symbol)
 
-    # ── Try cache first ──
+    # 1. Try loading from local cache first
     if not force_refresh and _is_cache_valid(cache_file, start_ts, end_ts):
         logger.debug(f"Cache hit: {symbol}")
         df = _load_cache(cache_file)
-        # Slice to requested range
         return df.loc[start_ts:end_ts]
 
-    # ── Fetch from yfinance ──
+    # 2. Fetch from yfinance if not cached or refresh is forced
     logger.debug(f"Fetching from yfinance: {symbol} [{start} → {end}]")
     last_exc: Exception | None = None
 
@@ -134,8 +99,8 @@ def fetch_symbol(
             df = ticker.history(
                 start=str(start_ts.date()),
                 end=str((end_ts + pd.Timedelta(days=1)).date()),
-                auto_adjust=False,   # Keep both adjusted and unadjusted
-                actions=False,       # We don't use dividends/splits directly
+                auto_adjust=False,
+                actions=False,
             )
 
             if df is None or df.empty:
@@ -144,7 +109,6 @@ def fetch_symbol(
                     time.sleep(retry_delay)
                 continue
 
-            # yfinance column normalisation
             df = df.rename(columns={"Adj Close": "Adj Close"})
             if "Adj Close" not in df.columns and "Close" in df.columns:
                 logger.warning(
@@ -152,7 +116,6 @@ def fetch_symbol(
                 )
                 df["Adj Close"] = df["Close"]
 
-            # Strip timezone
             if df.index.tz is not None:
                 df.index = df.index.tz_localize(None)
 
@@ -171,7 +134,7 @@ def fetch_symbol(
     return None
 
 
-# ─── Panel Fetch ──────────────────────────────────────────────────────────────
+# Panel Fetch
 
 def fetch_panel(
     universe: Universe,
@@ -184,19 +147,6 @@ def fetch_panel(
     """Fetch and validate OHLCV data for all universe symbols.
 
     Also fetches the benchmark index separately.
-
-    Args:
-        universe: Universe object with symbols and date range.
-        cache_dir: Root directory for Parquet cache.
-        force_refresh: Force re-download from yfinance.
-        max_fill_days: Max consecutive NaN days to forward-fill.
-        min_rows: Minimum valid rows to keep a symbol.
-        batch_delay: Seconds to sleep between symbol fetches (rate-limiting).
-
-    Returns:
-        Tuple of:
-            - panel: Dict of symbol → validated OHLCV DataFrame.
-            - benchmark_df: Benchmark OHLCV DataFrame.
     """
     cache_dir = Path(cache_dir)
     start = str(universe.start_date.date())
@@ -205,7 +155,7 @@ def fetch_panel(
     raw_panel: dict[str, pd.DataFrame] = {}
     failed_symbols: list[str] = []
 
-    # ── Fetch all symbols ──
+    # 1. Fetch data for all universe symbols (with batch delay to prevent rate limits)
     logger.info(f"Fetching {len(universe.symbols)} symbols from yfinance...")
     for symbol in tqdm(universe.symbols, desc="Downloading market data"):
         df = fetch_symbol(
@@ -222,11 +172,9 @@ def fetch_panel(
         time.sleep(batch_delay)
 
     if failed_symbols:
-        logger.warning(
-            f"{len(failed_symbols)} symbols failed to fetch: {failed_symbols}"
-        )
+        logger.warning(f"{len(failed_symbols)} symbols failed to fetch: {failed_symbols}")
 
-    # ── Validate all data ──
+    # 2. Clean and validate fetched data
     logger.info("Running data validation on fetched panel...")
     clean_panel, reports = validate_panel(
         raw_panel,
@@ -237,7 +185,7 @@ def fetch_panel(
     # Update universe with only successfully fetched + validated symbols
     universe.set_active_symbols(list(clean_panel.keys()))
 
-    # ── Fetch benchmark ──
+    # 3. Fetch benchmark index data
     logger.info(f"Fetching benchmark: {universe.benchmark}")
     benchmark_df = fetch_symbol(
         symbol=universe.benchmark,
