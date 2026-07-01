@@ -15,11 +15,13 @@ A modular, reproducible, and mathematically rigorous Python-based quantitative r
 3. [Strategy Definitions](#-strategy-definitions)
 4. [Meta-Allocation Layer](#%EF%B8%8F-meta-allocation-layer)
 5. [Transaction Cost Model](#-transaction-cost-model)
-6. [Quick Start & Installation](#-quick-start--installation)
+6. [Quick Start & Installation](#%EF%B8%8F-quick-start--installation)
 7. [Running the Engine](#-running-the-engine)
-8. [Performance Outputs](#-performance-outputs)
-9. [Data & Implementation Limitations](#-data--implementation-limitations)
-10. [References](#-references)
+8. [Interactive Dashboard](#-interactive-dashboard)
+9. [Performance Outputs](#-performance-outputs)
+10. [Docker Setup](#-docker-setup)
+11. [Data & Implementation Limitations](#-data--implementation-limitations)
+12. [References](#-references)
 
 ---
 
@@ -32,6 +34,7 @@ A modular, reproducible, and mathematically rigorous Python-based quantitative r
     *   Incorporates SEBI-accurate fees, stamp duties, GST, STT, and slippage.
     *   Models cash buffers, position count restrictions, and weight caps.
 *   **Comprehensive Risk Analytics**: Generates annual/monthly return heatmaps, drawdown profiles, rolling risk metrics, and interactive Plotly visuals.
+*   **Interactive Web Dashboard**: Built-in browser-based UI for editing configs, running backtests, viewing live logs, and exploring interactive charts.
 *   **Walk-Forward Framework**: Supports strict out-of-sample (OOS) verification across multiple historical periods.
 
 ---
@@ -48,14 +51,23 @@ quant-assignment/
 │   ├── data/            # YFinance ingestion, parquet caching, and validation
 │   ├── features/        # Returns, RSI, z-score, and market breadth logic
 │   ├── signals/         # Base interface & concrete signal generators
-│   ├── portfolio/       # Weight constraint solvers
-│   ├── backtest/        # Event-driven daily simulation loops
+│   ├── portfolio/       # Weight constraint solvers & rebalance scheduling
+│   ├── backtest/        # Event-driven daily simulation loops & cost model
 │   ├── meta_allocator/  # Dynamic multi-strategy weighting
 │   ├── risk/            # Sharpe, Max Drawdown, Calmar, Sortino computations
-│   └── analytics/       # Plotly-based HTML chart rendering
+│   ├── analytics/       # Plotly-based HTML chart rendering & performance reports
+│   ├── dashboard/       # Interactive web UI (HTML/CSS/JS frontend)
+│   └── utils/           # Config loader (Pydantic) & structured logging (loguru)
+├── scripts/
+│   ├── run_backtest.py  # CLI entry point for the full backtest pipeline
+│   └── dashboard.py     # Lightweight Python HTTP server for the web dashboard
 ├── tests/               # Unit testing coverage for signals, data, and backtester
-├── scripts/             # Python command-line execution entry point
-└── outputs/             # Generated HTML charts, blotters, and CSV sheets (gitignored)
+├── data_cache/          # Local Parquet cache of fetched market data (gitignored)
+├── outputs/             # Generated HTML charts, blotters, and CSV sheets (gitignored)
+├── Dockerfile           # Container image definition
+├── docker-compose.yml   # Docker Compose configuration
+├── pyproject.toml       # Project metadata & dependency specification
+└── requirements.txt     # Pinned dependency list
 ```
 
 ### Process Flow Chart
@@ -73,6 +85,7 @@ graph TD
     F --> G[Portfolio Constraint Solver]
     G --> H[Event-Driven Backtest Simulator]
     H --> I[Performance Metrics, CSV Logs, & HTML Charts]
+    I --> J[Interactive Web Dashboard]
 ```
 
 ---
@@ -134,14 +147,14 @@ Based on SEBI and National Stock Exchange of India (NSE) guidelines:
 ## 🛠️ Quick Start & Installation
 
 ### Prerequisites
-*   **Python**: Version 3.11 or higher
+*   **Python**: Version 3.11 or higher (tested with Python 3.11 and 3.13)
 *   **Git**: Required for cloning the repository
 
 ### Local Setup
 
 1.  **Clone the Repository**:
     ```bash
-    git clone https://github.com/your-username/quant-assignment.git
+    git clone https://github.com/fr-jazxx/quant-assignment.git
     cd quant-assignment
     ```
 
@@ -151,6 +164,10 @@ Based on SEBI and National Stock Exchange of India (NSE) guidelines:
         python -m venv venv
         .\venv\Scripts\Activate.ps1
         ```
+        > **Note:** If you get a script execution policy error, run the following command first, then retry activation:
+        > ```powershell
+        > Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process
+        > ```
     *   **macOS / Linux**:
         ```bash
         python3 -m venv venv
@@ -169,34 +186,69 @@ Based on SEBI and National Stock Exchange of India (NSE) guidelines:
 ## 💻 Running the Engine
 
 ### Full Backtest Execution
-Run the end-to-end backtest pipeline using:
+Run the end-to-end backtest pipeline. Data is automatically downloaded from Yahoo Finance on first run and cached locally as Parquet files in `data_cache/`:
 ```bash
-python scripts/run_backtest.py --config-dir config/
+python scripts/run_backtest.py
+```
+
+All CLI options are optional and have sensible defaults:
+```bash
+python scripts/run_backtest.py --config-dir config/ --output-dir outputs/ --log-level INFO
 ```
 
 ### Specific Period Run
 Run over predefined partitions defined in `config/universe.yaml`:
 ```bash
-# Training window (2015-2020)
-python scripts/run_backtest.py --config-dir config/ --period train
+# Training window (2015–2017)
+python scripts/run_backtest.py --period train
 
-# Out-of-Sample window (2023-2024)
-python scripts/run_backtest.py --config-dir config/ --period oos
+# Validation window (2018–2019)
+python scripts/run_backtest.py --period validation
+
+# Out-of-Sample / COVID stress test (2020)
+python scripts/run_backtest.py --period oos
 ```
 
-### Other Commands
-*   **Force Data Refresh**: Skip the cache and fetch fresh pricing data from yfinance.
+### Force Data Refresh
+Skip the Parquet cache and re-download all pricing data from Yahoo Finance:
+```bash
+python scripts/run_backtest.py --force-refresh
+```
+
+### Run Unit Tests
+```bash
+pytest tests/ -v
+```
+
+### Check Test Coverage
+```bash
+pytest tests/ -v --cov=src --cov-report=html
+```
+
+---
+
+## 🖥️ Interactive Dashboard
+
+The project includes a built-in web dashboard for a visual, interactive experience. It allows you to:
+*   View all performance metrics at a glance
+*   Explore interactive Plotly charts (equity curve, drawdowns, heatmaps, rolling risk, strategy weights, regime overlays)
+*   Edit YAML configuration files live in the browser
+*   Run backtests in the background and stream live logs
+*   Download CSV output files
+
+### Starting the Dashboard
+
+1.  **Launch the dashboard server**:
     ```bash
-    python scripts/run_backtest.py --config-dir config/ --force-refresh
+    python scripts/dashboard.py
     ```
-*   **Run Automated Unit Tests**:
-    ```bash
-    pytest tests/ -v
+2.  **Open your browser** and navigate to:
     ```
-*   **Check Test Coverage**:
-    ```bash
-    pytest tests/ -v --cov=src --cov-report=html
+    http://localhost:8000/
     ```
+3.  The server automatically tries the next port if `8000` is busy (up to 10 attempts).
+
+> **Important:** You must run the backtest at least once (`python scripts/run_backtest.py`) before the dashboard can display charts and metrics. Alternatively, you can trigger a backtest run directly from the dashboard UI.
 
 ---
 
@@ -205,7 +257,7 @@ python scripts/run_backtest.py --config-dir config/ --period oos
 After a successful backtest run, all outputs are exported to the `outputs/` directory:
 
 *   **Interactive Visualizations (HTML)**:
-    *   `equity_curve.html`: Cumulative return path vs. NIFTY 50/100 benchmark.
+    *   `equity_curve.html`: Cumulative return path vs. NIFTY 50 benchmark.
     *   `drawdown_curve.html`: Time-series drawdown profiles.
     *   `monthly_heatmap.html`: Monthly performance grid across all years.
     *   `rolling_metrics.html`: Moving Sharpe, Sortino, and Volatility values.
@@ -215,6 +267,27 @@ After a successful backtest run, all outputs are exported to the `outputs/` dire
     *   `trade_blotter.csv`: Complete history of all executed buys/sells.
     *   `holdings_history.csv`: Daily weights held per asset.
     *   `equity_curve.csv`: Daily net asset values (NAV) and cash levels.
+    *   `monthly_returns.csv`: Monthly return breakdown table.
+    *   `meta_allocation_history.csv`: Meta-allocator weight history over time.
+*   **JSON**:
+    *   `metrics.json`: Machine-readable performance metrics (used by the dashboard).
+
+---
+
+## 🐳 Docker Setup
+
+You can run the engine inside a Docker container without installing Python locally:
+
+```bash
+# Build the image
+docker build -t quant-engine .
+
+# Run the full backtest
+docker run --rm -v $(pwd)/outputs:/app/outputs quant-engine
+
+# Or use Docker Compose
+docker-compose up
+```
 
 ---
 
